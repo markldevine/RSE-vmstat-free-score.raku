@@ -14,7 +14,7 @@ Group=root
 WorkingDirectory=/var/lib/data/scripts
 
 # Call Raku explicitly using the pinned interpreter path
-ExecStart=/var/lib/data/scripts/vmstat-free-score.raku
+ExecStart=/var/lib/data/raku/bin/raku /var/lib/data/scripts/vmstat-free-score.raku
 
 # Journal tag
 SyslogIdentifier=vmstat-free-score
