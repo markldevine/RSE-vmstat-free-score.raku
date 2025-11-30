@@ -1,0 +1,29 @@
+[Unit]
+Description=Run vmstat/free score collector (Raku)
+ConditionPathIsExecutable=/var/lib/data/scripts/vmstat-free-score.raku
+
+[Service]
+Type=oneshot
+User=mdevine
+Group=mdevine
+# Optional: set a working directory if your script expects relative paths
+WorkingDirectory=/var/lib/data/scripts
+# Explicitly define the command
+ExecStart=/var/lib/data/scripts/vmstat-free-score.raku
+# Environment variables if needed (uncomment and customize)
+# Environment=RACK_ENV=production
+
+# If you want logs in journal with a tag:
+SyslogIdentifier=vmstat-free-score
+
+# Security hardening (optional but recommended)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
