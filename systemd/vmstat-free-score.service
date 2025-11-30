@@ -4,8 +4,8 @@ ConditionPathIsExecutable=/var/lib/data/scripts/vmstat-free-score.raku
 
 [Service]
 Type=oneshot
-User=mdevine
-Group=mdevine
+User=root
+Group=root
 # Optional: set a working directory if your script expects relative paths
 WorkingDirectory=/var/lib/data/scripts
 # Explicitly define the command
