@@ -28,3 +28,13 @@ ssh root@mos03 systemctl daemon-reload
 ssh root@mos01 systemctl enable --now vmstat-free-score.timer
 ssh root@mos02 systemctl enable --now vmstat-free-score.timer
 ssh root@mos03 systemctl enable --now vmstat-free-score.timer
+
+Usage
+-----
+First, all containers should start at the top of the minute.
+
+Any mos01, mos02, or mos03 resident script can execute:
+```
+valkey-cli -h 172.19.2.254 --raw ZREVRANGE RSE^worker-node-candidates 0 0
+```
+which will return a hostname.  If their hostname matches, they run the workload.
