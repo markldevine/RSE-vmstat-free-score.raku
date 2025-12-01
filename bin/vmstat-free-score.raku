@@ -1,12 +1,13 @@
-#!/var/lib/data/raku/maxzef/bin/raku
 #!/var/lib/data/raku/bin/raku
+#!/var/lib/data/raku/maxzef/bin/raku
 # vmstat-free-score-ema.raku
 # Final freedom score (0..100, higher = more idle) using hysteresis over N samples.
 
-use Data::Dump::Tree;
+#use Data::Dump::Tree;
 #use Grammar::Debugger;
 
-my $now;
+my DateTime $now;
+my Bool     $maintenance-window-zone    = False;
 
 #   /usr/bin/rebootmgrctl get-window
 #   Maintenance window is set to '*-*-* 01:00:00', lasting 00:15.
@@ -22,30 +23,34 @@ grammar REBOOTMGRWINDOW-grammar {
 }
 
 class REBOOTMGRWINDOW-actions {
-    method TOP ($/) {
+    method wtime ($/) {
         my $win = DateTime.new( :year($now.year), :month($now.month), :day($now.day),
-                                :hour($/<wtime><whour>),
-                                :minute($/<wtime><wmin>),
-                                :second($/<wtime><wsec>),
-                                :zone('UTC'));
+                                :hour($/<whour>),
+                                :minute($/<wmin>),
+                                :second($/<wsec>),
+                                :timezone($*TZ),
+                              );
+        $maintenance-window-zone = True if 0 <= ($win - $now).abs >= 15;
     }
 }
 
+$now        = DateTime.new(now);
 my $proc    = run '/usr/bin/rebootmgrctl', 'get-window', :out, :err;
 my $out     = $proc.out.slurp(:close);
 my $err     = $proc.err.slurp(:close);
-$now        = DateTime.new(now);
 if $proc.exitcode != 0 {
     note "/usr/bin/rebootmgrctl get-window error: {$err} {$proc.exitcode}";
 }
 else {
-    if my $match = REBOOTMGRWINDOW-grammar.parse($out, :actions(REBOOTMGRWINDOW-actions)) {
-        put $match.made;
+    if my $match = REBOOTMGRWINDOW-grammar.parse($out.trim, :actions(REBOOTMGRWINDOW-actions)) {
+        if $maintenance-window-zone {
+            my $valkey = sprintf "valkey-cli -h 172.19.2.254 --raw ZADD RSE^worker-node-candidates %.2f %s", 0, $*KERNEL.hostname;
+            qqx{$valkey};
+            exit 0;
+        }
     }
     else { die; }
 }
-
-=finish
 
 # ----------------------------
 # Sampling configuration
