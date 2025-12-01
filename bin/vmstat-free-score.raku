@@ -30,7 +30,7 @@ class REBOOTMGRWINDOW-actions {
                                 :second($/<wsec>),
                                 :timezone($*TZ),
                               );
-        $maintenance-window-zone = True if 0 <= ($win - $now).abs >= 15;
+        $maintenance-window-zone = True if 0 <= ($win - $now).abs <= 15;
     }
 }
 
