@@ -1,6 +1,51 @@
+#!/var/lib/data/raku/maxzef/bin/raku
 #!/var/lib/data/raku/bin/raku
 # vmstat-free-score-ema.raku
 # Final freedom score (0..100, higher = more idle) using hysteresis over N samples.
+
+use Data::Dump::Tree;
+#use Grammar::Debugger;
+
+my $now;
+
+#   /usr/bin/rebootmgrctl get-window
+#   Maintenance window is set to '*-*-* 01:00:00', lasting 00:15.
+grammar REBOOTMGRWINDOW-grammar {
+    token TOP   { ^ 'Maintenance window is set to ' '\'*-*-* ' <wtime> '\', lasting ' <wdur> '.' $ }
+    token wtime { <whour> ':' <wmin> ':' <wsec> }
+    token whour { \d\d }
+    token wmin  { \d\d }
+    token wsec  { \d\d }
+    token wdur  { <dhour> ':' <dmin> }
+    token dhour { \d\d }
+    token dmin  { \d\d }
+}
+
+class REBOOTMGRWINDOW-actions {
+    method TOP ($/) {
+        my $win = DateTime.new( :year($now.year), :month($now.month), :day($now.day),
+                                :hour($/<wtime><whour>),
+                                :minute($/<wtime><wmin>),
+                                :second($/<wtime><wsec>),
+                                :zone('UTC'));
+    }
+}
+
+my $proc    = run '/usr/bin/rebootmgrctl', 'get-window', :out, :err;
+my $out     = $proc.out.slurp(:close);
+my $err     = $proc.err.slurp(:close);
+$now        = DateTime.new(now);
+if $proc.exitcode != 0 {
+    note "/usr/bin/rebootmgrctl get-window error: {$err} {$proc.exitcode}";
+}
+else {
+    if my $match = REBOOTMGRWINDOW-grammar.parse($out, :actions(REBOOTMGRWINDOW-actions)) {
+        put $match.made;
+    }
+    else { die; }
+}
+
+=finish
 
 # ----------------------------
 # Sampling configuration
