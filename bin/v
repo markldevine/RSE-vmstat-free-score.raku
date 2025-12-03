@@ -1,0 +1,183 @@
+#!/var/lib/data/raku/maxzef/bin/raku
+#!/var/lib/data/raku/bin/raku
+
+my $valkey-list = 'RSE^statistics' ~ $*KERNEL.hostname ~ '^vmstat^rollingsixty';
+
+#   for ((i=0; i<60; i++)); do valkey-cli -h 172.19.2.254 LPUSH RSE^statistics^vmstat^sixty $i; done
+
+#   mdevine@mos01:~> vmstat -y -n -t 1 2
+#   procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu------- -----timestamp-----
+#    r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu                 EST
+#    0  0      0 236288   2800 220600    0    0     0     0  563  335  0  0 99  0  0  0 2025-12-03 08:38:29
+#    0  0      0 236952   2800 220600    0    0     0     0  532  319  0  0 100 0  0  0 2025-12-03 08:38:30
+
+use Redis;
+
+
+
+
+use JSON::Marshal;
+use JSON::Unmarshal;
+class MicroOS::vmstat::record {
+    subset hh-mm-ss     of Str where $_ ~~ /^\d\d ':' \d\d ':' \d\d$/;
+    subset yyyy-mm-dd   of Str where $_ ~~ /^\d\d\d\d '-' \d\d '-' \d\d$/;
+    has Int         $.v-r           is required;
+    has Int         $.v-b           is required;
+    has Int         $.v-swpd        is required;
+    has Int         $.v-free        is required;
+    has Int         $.v-buff        is required;
+    has Int         $.v-cache       is required;
+    has Int         $.v-si          is required;
+    has Int         $.v-so          is required;
+    has Int         $.v-bi          is required;
+    has Int         $.v-bo          is required;
+    has Int         $.v-in          is required;
+    has Int         $.v-cs          is required;
+    has Int         $.v-us          is required;
+    has Int         $.v-sy          is required;
+    has Int         $.v-id          is required;
+    has Int         $.v-wa          is required;
+    has Int         $.v-st          is required;
+    has Int         $.v-gu          is required;
+    has yyyy-mm-dd  $.v-date;
+    has hh-mm-ss    $.v-time;
+    has DateTime    $.v-datetime;
+
+    submethod BUILD(
+                    :$v-r,
+                    :$v-b,
+                    :$v-swpd,
+                    :$v-free,
+                    :$v-buff,
+                    :$v-cache,
+                    :$v-si,
+                    :$v-so,
+                    :$v-bi,
+                    :$v-bo,
+                    :$v-in,
+                    :$v-cs,
+                    :$v-us,
+                    :$v-sy,
+                    :$v-id,
+                    :$v-wa,
+                    :$v-st,
+                    :$v-gu,
+                    :$v-date,
+                    :$v-time,
+                   ) {
+        $!v-r       = $v-r.Int;
+        $!v-b       = $v-b.Int;
+        $!v-swpd    = $v-swpd.Int;
+        $!v-free    = $v-free.Int;
+        $!v-buff    = $v-buff.Int;
+        $!v-cache   = $v-cache.Int;
+        $!v-si      = $v-si.Int;
+        $!v-so      = $v-so.Int;
+        $!v-bi      = $v-bi.Int;
+        $!v-bo      = $v-bo.Int;
+        $!v-in      = $v-in.Int;
+        $!v-cs      = $v-cs.Int;
+        $!v-us      = $v-us.Int;
+        $!v-sy      = $v-sy.Int;
+        $!v-id      = $v-id.Int;
+        $!v-wa      = $v-wa.Int;
+        $!v-st      = $v-st.Int;
+        $!v-gu      = $v-gu.Int;
+        if $v-date && $v-time {
+            $!v-date = $v-date;
+            $!v-time = $v-time;
+            my ($year, $month, $day)        = $v-date.split('-');
+            my ($hour, $minute, $second)    = $v-time.split(':');
+            $!v-datetime = DateTime.new(:$year, :$month, :$day, :$hour, :$minute, :$second, :timezone($*TZ));
+        }
+    }
+
+    method marshal {
+#       return marshal(self, :sorted-keys);
+        return marshal(self);
+    }
+
+#   method unmarshal (:$json!) {
+#       self        = unmarshal($json);
+#   }
+}
+
+my $valkey = Redis.new("172.19.2.254:6379", :decode_response);
+my $proc = Proc::Async.new('/usr/bin/vmstat', '-y', '-n', '-t', 1);
+
+react {
+    whenever $proc.stdout -> $line {
+        if $line ~~ /^ \s* \d+ \s+ \d+ \s+ \d+/ {
+            my  (
+                    $v-r,
+                    $v-b,
+                    $v-swpd,
+                    $v-free,
+                    $v-buff,
+                    $v-cache,
+                    $v-si,
+                    $v-so,
+                    $v-bi,
+                    $v-bo,
+                    $v-in,
+                    $v-cs,
+                    $v-us,
+                    $v-sy,
+                    $v-id,
+                    $v-wa,
+                    $v-st,
+                    $v-gu,
+                    $v-date,
+                    $v-time,
+                )   = $line.trim.split(/\s+/);
+            my MicroOS::vmstat::record $v-record .= new(
+                :$v-r,
+                :$v-b,
+                :$v-swpd,
+                :$v-free,
+                :$v-buff,
+                :$v-cache,
+                :$v-si,
+                :$v-so,
+                :$v-bi,
+                :$v-bo,
+                :$v-in,
+                :$v-cs,
+                :$v-us,
+                :$v-sy,
+                :$v-id,
+                :$v-wa,
+                :$v-st,
+                :$v-gu,
+                :$v-date,
+                :$v-time,
+            );
+            $valkey.lset($valkey-list, +$v-record.v-datetime.second, $v-record.marshal) or note 'valkey LSET ' ~ $v-record.v-datetime.second ~ ' failed';
+        }
+    }
+
+    whenever $proc.stderr -> $err {
+        note "Error: {$err.trim}";
+        done;
+    }
+
+    whenever $proc.start -> $promise {
+        whenever $promise -> $status {
+            if $status.signal {
+                note 'vmstat was killed by signal: ' ~ $status.signal;
+            }
+            elsif $status.exit {
+                note 'vmstat exited normally with code: ' ~ $status.exitcode;
+            }
+            else {
+                note 'vmstat ended unexpectedly';
+            }
+            done;
+        }
+    }
+}
+
+$valkey.quit;
+exit 1;                                                                                         # should never exit...
+
+=finish

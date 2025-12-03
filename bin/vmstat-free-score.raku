@@ -7,7 +7,8 @@
 #use Grammar::Debugger;
 
 my DateTime $now;
-my Bool     $maintenance-window-zone    = False;
+my DateTime $maintenance-window-open;
+my Int      $maintenance-window-duration-seconds;
 
 #   /usr/bin/rebootmgrctl get-window
 #   Maintenance window is set to '*-*-* 01:00:00', lasting 00:15.
@@ -24,13 +25,16 @@ grammar REBOOTMGRWINDOW-grammar {
 
 class REBOOTMGRWINDOW-actions {
     method wtime ($/) {
-        my $win = DateTime.new( :year($now.year), :month($now.month), :day($now.day),
-                                :hour($/<whour>),
-                                :minute($/<wmin>),
-                                :second($/<wsec>),
-                                :timezone($*TZ),
-                              );
-        $maintenance-window-zone = True if 0 <= ($win - $now).abs <= 15;
+        $maintenance-window-open =
+            DateTime.new(:year($now.year), :month($now.month), :day($now.day),
+                         :hour($/<whour>),
+                         :minute($/<wmin>),
+                         :second($/<wsec>),
+                         :timezone($*TZ),
+                        );
+    }
+    method wdur ($/) {
+        $maintenance-window-duration-seconds = (+$/<dhour> * 60 * 60) + (+$/<dmin> * 60);
     }
 }
 
@@ -42,12 +46,14 @@ if $proc.exitcode != 0 {
     note "/usr/bin/rebootmgrctl get-window error: {$err} {$proc.exitcode}";
 }
 else {
-    if my $match = REBOOTMGRWINDOW-grammar.parse($out.trim, :actions(REBOOTMGRWINDOW-actions)) {
-        if $maintenance-window-zone {
-            my $valkey = sprintf "valkey-cli -h 172.19.2.254 --raw ZADD RSE^worker-node-candidates %.2f %s", 0, $*KERNEL.hostname;
-            qqx{$valkey};
-            exit 0;
-        }
+    if my $match        = REBOOTMGRWINDOW-grammar.parse($out.trim, :actions(REBOOTMGRWINDOW-actions)) {
+        my $proximity   = $maintenance-window-open - $now;
+        if $proximity < 0 {
+            if $proximity.abs <= (15 * 60) {
+                my $valkey = sprintf "valkey-cli -h 172.19.2.254 --raw ZADD RSE^worker-node-candidates %.2f %s", 0, $*KERNEL.hostname;
+                qqx{$valkey};
+                exit 0;
+            }
     }
     else { die; }
 }
