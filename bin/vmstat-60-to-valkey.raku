@@ -9,7 +9,7 @@ my $valkey      = Redis.new("172.19.2.254:6379", :decode_response);
 $valkey.del($valkey-list) if $valkey.exists($valkey-list);
 $valkey.rpush($valkey-list, (0 xx 60));
 
-#   mdevine@mos01:~> vmstat -y -n -t 1 2
+#   ~> vmstat -y -n -t 1 2
 #   procs -----------memory---------- ---swap-- -----io---- -system-- -------cpu------- -----timestamp-----
 #    r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st gu                 EST
 #    0  0      0 236288   2800 220600    0    0     0     0  563  335  0  0 99  0  0  0 2025-12-03 08:38:29
@@ -64,7 +64,6 @@ react {
                 :$v-date,
                 :$v-time,
             );
-put $v-record.v-datetime.second;
             $valkey.lset($valkey-list, +$v-record.v-datetime.second, $v-record.marshal) or note 'valkey LSET ' ~ $v-record.v-datetime.second ~ ' failed';
         }
     }
